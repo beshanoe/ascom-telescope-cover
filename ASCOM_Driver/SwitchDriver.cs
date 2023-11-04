@@ -71,21 +71,28 @@ namespace ASCOM.DarkSkyGeek
         // The object used to communicate with the device using serial port communication.
         private Serial objSerial;
 
+        private BaseSwitch[] switches = new BaseSwitch[]
+        {
+            new ToggleSwitch { Name = "Cover", Description = "Automatically opens or closes the telescope cover", SetCommand = "COMMAND:SET_COVER:", GetCommand = "COMMAND:COVER" },
+            new ToggleSwitch { Name = "Light", Description = "Automatically turns on or off the light", SetCommand = "COMMAND:SET_LIGHT:", GetCommand = "COMMAND:LIGHT" },
+            new RangeSwitch { Name = "Light Intensity", Description = "Adjusts the light intensity", Max = MAX_BRIGHTNESS, Min = 0, Step = 1, SetCommand = "COMMAND:LIGHT:SET_INTENSITY:", GetCommand = "COMMAND:LIGHT:INTENSITY" },
+            new ReadonlySwitch { Name = "G force x", Description = "Measures the G force on the x axis", GetCommand = "COMMAND:GFORCE:X" },
+            new ReadonlySwitch { Name = "G force y", Description = "Measures the G force on the y axis", GetCommand = "COMMAND:GFORCE:Y" },
+            new ReadonlySwitch { Name = "G force z", Description = "Measures the G force on the z axis", GetCommand = "COMMAND:GFORCE:Z" },
+        };
+
         // Constants used to communicate with the device
         // Make sure those values are identical to those in the Arduino Firmware.
         // (I could not come up with an easy way to share them across the two projects)
         private const string SEPARATOR = "\n";
 
-        private const string DEVICE_GUID = "b45ba2c9-f554-4b4e-a43c-10605ca3b84d";
+        private const string DEVICE_GUID = "cbbada80-325b-459a-9f70-8677a3e31241";
 
         private const string COMMAND_PING = "COMMAND:PING";
-        private const string COMMAND_GETSTATE = "COMMAND:GETSTATE";
-        private const string COMMAND_OPEN = "COMMAND:OPEN";
-        private const string COMMAND_CLOSE = "COMMAND:CLOSE";
 
         private const string RESULT_PING = "RESULT:PING:OK:";
-        private const string RESULT_STATE_OPEN = "RESULT:STATE:OPEN";
-        private const string RESULT_STATE_CLOSED = "RESULT:STATE:CLOSED";
+
+        private const int MAX_BRIGHTNESS = 255;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Switch"/> class.
@@ -336,8 +343,6 @@ namespace ASCOM.DarkSkyGeek
 
         #region ISwitchV2 Implementation
 
-        private short numSwitch = 1;
-
         /// <summary>
         /// The number of switches managed by this driver
         /// </summary>
@@ -345,8 +350,8 @@ namespace ASCOM.DarkSkyGeek
         {
             get
             {
-                tl.LogMessage("MaxSwitch Get", numSwitch.ToString());
-                return this.numSwitch;
+                tl.LogMessage("MaxSwitch Get", switches.Length.ToString());
+                return (short)switches.Length;
             }
         }
 
@@ -361,7 +366,7 @@ namespace ASCOM.DarkSkyGeek
         {
             Validate("GetSwitchName", id);
             tl.LogMessage("GetSwitchName", $"GetSwitchName({id})");
-            return deviceName;
+            return switches[id].Name;
         }
 
         /// <summary>
@@ -386,7 +391,7 @@ namespace ASCOM.DarkSkyGeek
         {
             Validate("GetSwitchDescription", id);
             tl.LogMessage("GetSwitchDescription", $"GetSwitchDescription({id})");
-            return "Automatically opens or closes the telescope cover";
+            return switches[id].Description;
         }
 
         /// <summary>
@@ -401,11 +406,11 @@ namespace ASCOM.DarkSkyGeek
         /// <exception cref="InvalidValueException">If id is outside the range 0 to MaxSwitch - 1</exception>
         public bool CanWrite(short id)
         {
-            bool writable = true;
+            bool writable = switches[id] is ToggleSwitch || switches[id] is RangeSwitch;
             Validate("CanWrite", id);
             // default behavour is to report true
             tl.LogMessage("CanWrite", $"CanWrite({id}): {writable}");
-            return true;
+            return writable;
         }
 
         #region Boolean switch members
@@ -422,7 +427,18 @@ namespace ASCOM.DarkSkyGeek
         {
             Validate("GetSwitch", id);
             tl.LogMessage("GetSwitch", $"GetSwitch({id})");
-            return QueryDeviceState();
+
+            BaseSwitch currentSwitch = switches[id];
+
+            if (currentSwitch is ToggleSwitch)
+            {
+                string response = QueryDeviceValue(currentSwitch.GetCommand);
+                return response == "ON";
+            } else
+            {
+                throw new MethodNotImplementedException("GetSwitch");
+            }   
+
         }
 
         /// <summary>
@@ -431,7 +447,7 @@ namespace ASCOM.DarkSkyGeek
         /// </summary>
         /// <param name="id"></param>
         /// <param name="state"></param>
-        public void SetSwitch(short id, bool state)
+        public void SetSwitch(short id, bool value)
         {
             Validate("SetSwitch", id);
             if (!CanWrite(id))
@@ -440,11 +456,16 @@ namespace ASCOM.DarkSkyGeek
                 tl.LogMessage("SetSwitch", str);
                 throw new MethodNotImplementedException(str);
             }
-            tl.LogMessage("SetSwitch", $"SetSwitch({id}) = {state}");
-            if (state)
-                OpenCover();
-            else
-                CloseCover();
+            
+            BaseSwitch currentSwitch = switches[id];
+
+            if (currentSwitch is ToggleSwitch)
+            {
+                SendCommand(currentSwitch.SetCommand + (value ? "ON" : "OFF"));
+            } else
+            {
+                throw new MethodNotImplementedException("SetSwitch");
+            }
         }
 
         #endregion
@@ -461,7 +482,18 @@ namespace ASCOM.DarkSkyGeek
         {
             Validate("MaxSwitchValue", id);
             tl.LogMessage("MaxSwitchValue", $"MaxSwitchValue({id})");
-            return 1.0;
+            
+            if (switches[id] is RangeSwitch)
+            {
+                return ((RangeSwitch)switches[id]).Max;
+            } else if (switches[id] is ToggleSwitch)
+            {
+                return 1.0;
+            } else
+            {
+                return 0.0;
+            }
+
         }
 
         /// <summary>
@@ -474,7 +506,18 @@ namespace ASCOM.DarkSkyGeek
         {
             Validate("MinSwitchValue", id);
             tl.LogMessage("MinSwitchValue", $"MinSwitchValue({id})");
-            return 0.0;
+            if (switches[id] is RangeSwitch)
+            {
+                return ((RangeSwitch)switches[id]).Min;
+            }
+            else if (switches[id] is ToggleSwitch)
+            {
+                return 0.0;
+            }
+            else
+            {
+                return 0.0;
+            }
         }
 
         /// <summary>
@@ -488,7 +531,18 @@ namespace ASCOM.DarkSkyGeek
         {
             Validate("SwitchStep", id);
             tl.LogMessage("SwitchStep", $"SwitchStep({id})");
-            return 1.0;
+            if (switches[id] is RangeSwitch)
+            {
+                return ((RangeSwitch)switches[id]).Step;
+            }
+            else if (switches[id] is ToggleSwitch)
+            {
+                return 1.0;
+            }
+            else
+            {
+                return 0.0;
+            }
         }
 
         /// <summary>
@@ -501,7 +555,16 @@ namespace ASCOM.DarkSkyGeek
         {
             Validate("GetSwitchValue", id);
             tl.LogMessage("GetSwitchValue", $"GetSwitchValue({id}) - not implemented");
-            return QueryDeviceState() ? 1.0 : 0.0;
+
+            string response = QueryDeviceValue(switches[id].GetCommand);
+
+            if (switches[id] is ToggleSwitch)
+            {
+                return response == "ON" ? 1.0 : 0.0;
+            } else
+            {
+                return Convert.ToDouble(response);
+            }
         }
 
         /// <summary>
@@ -520,10 +583,19 @@ namespace ASCOM.DarkSkyGeek
                 throw new ASCOM.MethodNotImplementedException($"SetSwitchValue({id}) - Cannot write");
             }
             tl.LogMessage("SetSwitchValue", $"SetSwitchValue({id}) = {value}");
-            if (value == 1.0)
-                OpenCover();
-            else
-                CloseCover();
+
+            if (switches[id] is RangeSwitch)
+            {
+                RangeSwitch currentSwitch = (RangeSwitch)switches[id];
+                SendCommand(currentSwitch.SetCommand + value.ToString());
+            } else if (switches[id] is ToggleSwitch)
+            {
+                ToggleSwitch currentSwitch = (ToggleSwitch)switches[id];
+                SendCommand(currentSwitch.SetCommand + (value > 0 ? "ON" : "OFF"));
+            } else
+            {
+                throw new MethodNotImplementedException("SetSwitchValue");
+            }
         }
 
         #endregion
@@ -539,6 +611,7 @@ namespace ASCOM.DarkSkyGeek
         /// <param name="id">The id.</param>
         private void Validate(string message, short id)
         {
+            var numSwitch = MaxSwitch;
             if (id < 0 || id >= numSwitch)
             {
                 tl.LogMessage(message, string.Format("Switch {0} not available, range is 0 to {1}", id, numSwitch - 1));
@@ -773,52 +846,47 @@ namespace ASCOM.DarkSkyGeek
             tl.LogMessage(identifier, msg);
         }
 
-        /// <summary>
-        /// Sends a COMMAND:GETSTATE command to the device and return its value as a boolean
-        /// </summary>
-        private bool QueryDeviceState()
+        // <summary>
+        // Sends a command to the device and wait until it responds
+        // </summary>
+        private string QueryDeviceValue(string command)
         {
-            tl.LogMessage("QueryDeviceState", "Sending request to device...");
-            objSerial.Transmit(COMMAND_GETSTATE + SEPARATOR);
-            tl.LogMessage("QueryDeviceState", "Waiting for response from device...");
+            tl.LogMessage("QueryDeviceValue", "Sending request to device...");
+            objSerial.Transmit(command + SEPARATOR);
+            tl.LogMessage("QueryDeviceValue", "Waiting for response from device...");
             string response;
             try
             {
                 response = objSerial.ReceiveTerminated(SEPARATOR).Trim();
+                if (response.StartsWith("RESULT:" + command + ":"))
+                {
+                    response = response.Substring(("RESULT:" + command + ":").Length);
+                } else
+                {
+                    tl.LogMessage("QueryDeviceValue", "Invalid response from device: " + response);
+                    throw new ASCOM.DriverException("Invalid response from device: " + response);
+                }
             }
             catch (Exception e)
             {
-                tl.LogMessage("QueryDeviceState", "Exception: " + e.Message);
+                tl.LogMessage("QueryDeviceValue", "Exception: " + e.Message);
                 throw e;
             }
-            tl.LogMessage("QueryDeviceState", "Response from device: " + response);
-            if (response == RESULT_STATE_OPEN)
-                return true;
-            if (response == RESULT_STATE_CLOSED)
-                return false;
-            tl.LogMessage("QueryDeviceState", "Invalid response from device: " + response);
-            throw new ASCOM.DriverException("Invalid response from device: " + response);
+            tl.LogMessage("QueryDeviceValue", "Response from device: " + response);
+            return response;
         }
 
         /// <summary>
-        /// Sends a COMMAND:OPEN command to the device and wait until it responds
+        /// Sends acommand to the device and wait until it responds
         /// </summary>
-        private void OpenCover()
+        private void SendCommand(string command)
         {
-            tl.LogMessage("OpenCover", "Sending request to device...");
-            objSerial.Transmit(COMMAND_OPEN + SEPARATOR);
-            tl.LogMessage("OpenCover", "Request sent to device!");
+            tl.LogMessage("SendCommand", "Sending request to device...");
+            objSerial.Transmit(command + SEPARATOR);
+            tl.LogMessage("SendCommand", "Request sent to device!");
         }
 
-        /// <summary>
-        /// Sends a COMMAND:CLOSE command to the device and wait until it responds
-        /// </summary>
-        private void CloseCover()
-        {
-            tl.LogMessage("CloseCover", "Sending request to device...");
-            objSerial.Transmit(COMMAND_CLOSE + SEPARATOR);
-            tl.LogMessage("CloseCover", "Request sent to device!");
-        }
+
 
         #endregion
     }
