@@ -8,6 +8,7 @@
 #include "ServoEasing.hpp"
 #include <Wire.h>
 #include <ADXL345.h>
+#include <AceButton.h>
 
 constexpr auto DEVICE_GUID = "cbbada80-325b-459a-9f70-8677a3e31241";
 
@@ -35,14 +36,25 @@ constexpr auto ERROR_INVALID_COMMAND = "ERROR:INVALID_COMMAND";
 #define MIN_BRIGHTNESS 0
 #define MAX_BRIGHTNESS 255
 #define PWM_FREQ 20000
+#define BUTTON1_PIN A0
+#define BUTTON2_PIN A1
+#define BUTTON3_PIN A2
+
+using namespace ace_button;
 
 byte brightness = 0;
-int servoPin = 8;
-int ledPin = 9;
+int servoPin = 9;
+int ledPin = 8;
 int servoSpeed = 90;
 
 ServoEasing servo;
 ADXL345 adxl;
+
+AceButton firstButton(BUTTON1_PIN);
+AceButton secondButton(BUTTON2_PIN);
+AceButton thirdButton(BUTTON3_PIN);
+
+void handleButtonEvent(AceButton*, uint8_t, uint8_t);
 
 enum CoverState {
   open,
@@ -55,9 +67,9 @@ void setup() {
 
   // Initialize serial port I/O.
   Serial.begin(57600);
-  while (!Serial) {
-    ;  // Wait for serial port to connect. Required for native USB!
-  }
+  // while (!Serial) {
+  //   ;  // Wait for serial port to connect. Required for native USB!
+  // }
   Serial.flush();
 
   setupADXL345();
@@ -66,8 +78,7 @@ void setup() {
   // Important: We assume that the cover is in the closed position!
   // If it's not, then the servo will brutally close it when the system is powered up!
   // That may damage the mechanical parts, so be careful...
-  // servo.attach(servoPin, 0, 520, 2350);
-  servo.attach(servoPin);
+  servo.attach(servoPin, 0, 500, 2440);
 
   // Make sure the RX, TX, and built-in LEDs don't turn on, they are very bright!
   // Even though the board is inside an enclosure, the light can be seen shining
@@ -80,6 +91,44 @@ void setup() {
 
   // Setup LED pin as output
   pinMode(ledPin, OUTPUT);
+
+  pinMode(BUTTON1_PIN, INPUT);
+  pinMode(BUTTON2_PIN, INPUT);
+  pinMode(BUTTON3_PIN, INPUT);
+
+  firstButton.setEventHandler(handleButtonEvent);
+  secondButton.setEventHandler(handleButtonEvent);
+  thirdButton.setEventHandler(handleButtonEvent);
+}
+
+void handleButtonEvent(AceButton* button, uint8_t eventType,
+                       uint8_t /*buttonState*/) {
+  switch (eventType) {
+    case AceButton::kEventPressed:
+      if (button->getPin() == BUTTON1_PIN) {
+        if (state == open) {
+          closeCover();
+        } else {
+          openCover();
+        }
+      }
+      if (button->getPin() == BUTTON2_PIN) {
+        if (brightness > 0) {
+          calibratorOff();
+        } else {
+          calibratorOn(100);
+        }
+      }
+      if (button->getPin() == BUTTON3_PIN) {
+        brightness += 20;
+        if (brightness > 255) {
+          calibratorOff();
+        } else {
+          calibratorOn(brightness);
+        }
+      }
+      break;
+  }
 }
 
 void setupADXL345() {
@@ -163,6 +212,10 @@ void loop() {
       handleInvalidCommand();
     }
   }
+
+  firstButton.check();
+  secondButton.check();
+  thirdButton.check();
 }
 
 //-- CALIBRATOR HANDLING ------------------------------------------------------
@@ -191,7 +244,7 @@ void setBrightness() {
   // The `pwm` function is defined in the following file:
   // %localappdata%\Arduino15\packages\Seeeduino\hardware\samd\1.8.2\cores\arduino\wiring_pwm.cpp
   // For other Arduino-compatible boards, consider using:
-  //   analogWrite(ledPin, brightness);
+  // analogWrite(ledPin, brightness);
   // The nice thing about the `pwm` function is that we can set the frequency
   // to a much higher value (I use 20kHz) This does not work on all pins!
   // For example, it does not work on pin 7 of the Xiao, but it works on pin 8.
@@ -244,7 +297,7 @@ void sendInfoG(String command) {
     case 'Z':
       Serial.println(az);
       break;
-    default: 
+    default:
       Serial.println(0);
   }
 }
@@ -261,15 +314,16 @@ void sendCurrentCover() {
 }
 
 void openCover() {
-  // servo.startEaseTo(180, servoSpeed);
-  servo.write(180);
+  servo.startEaseTo(180, servoSpeed);
+
+  // servo.write(180);
 
   state = open;
 }
 
 void closeCover() {
-  // servo.startEaseTo(0, servoSpeed);
-  servo.write(0);
+  servo.startEaseTo(0, servoSpeed);
+  // servo.write(0);
 
   state = closed;
 }
