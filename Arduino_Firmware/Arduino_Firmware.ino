@@ -4,7 +4,7 @@
  * Licensed under the MIT License. See the accompanying LICENSE file for terms.
  */
 
-#include <Servo.h>
+#include <ESP32Servo.h>
 #include "ServoEasing.hpp"
 #include <Wire.h>
 #include <ADXL345.h>
@@ -47,6 +47,7 @@ int servoPin = 9;
 int ledPin = 8;
 int servoSpeed = 90;
 
+ESP32PWM ledPWM;
 ServoEasing servo;
 ADXL345 adxl;
 
@@ -57,14 +58,19 @@ AceButton thirdButton(BUTTON3_PIN);
 void handleButtonEvent(AceButton*, uint8_t, uint8_t);
 
 enum CoverState {
-  open,
-  closed
+  coverOpen,
+  coverClosed
 } state;
 
 // The `setup` function runs once when you press reset or power the board.
 void setup() {
-  state = closed;
+  state = coverClosed;
 
+  // Allow allocation of all timers
+  ESP32PWM::allocateTimer(0);
+  ESP32PWM::allocateTimer(1);
+  ESP32PWM::allocateTimer(2);
+  ESP32PWM::allocateTimer(3);
   // Initialize serial port I/O.
   Serial.begin(57600);
   // while (!Serial) {
@@ -78,19 +84,19 @@ void setup() {
   // Important: We assume that the cover is in the closed position!
   // If it's not, then the servo will brutally close it when the system is powered up!
   // That may damage the mechanical parts, so be careful...
-  servo.attach(servoPin, 0, 500, 2440);
+  servo.attach(servoPin, 0, 510, 2440);
 
   // Make sure the RX, TX, and built-in LEDs don't turn on, they are very bright!
   // Even though the board is inside an enclosure, the light can be seen shining
   // through the small opening for the USB connector! Unfortunately, it is not
   // possible to turn off the power LED (green) in code...
-  pinMode(PIN_LED_TXL, INPUT);
-  pinMode(PIN_LED_RXL, INPUT);
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);
+  // pinMode(PIN_LED_TXL, INPUT);
+  // pinMode(PIN_LED_RXL, INPUT);
+  // pinMode(LED_BUILTIN, OUTPUT);
+  // digitalWrite(LED_BUILTIN, HIGH);
 
   // Setup LED pin as output
-  pinMode(ledPin, OUTPUT);
+  ledPWM.attachPin(ledPin, PWM_FREQ, 10);
 
   pinMode(BUTTON1_PIN, INPUT);
   pinMode(BUTTON2_PIN, INPUT);
@@ -106,7 +112,7 @@ void handleButtonEvent(AceButton* button, uint8_t eventType,
   switch (eventType) {
     case AceButton::kEventPressed:
       if (button->getPin() == BUTTON1_PIN) {
-        if (state == open) {
+        if (state == coverOpen) {
           closeCover();
         } else {
           openCover();
@@ -218,8 +224,8 @@ void loop() {
   thirdButton.check();
 }
 
-//-- CALIBRATOR HANDLING ------------------------------------------------------
 
+//-- CALIBRATOR HANDLING ------------------------------------------------------
 
 void sendLightState() {
   Serial.print("RESULT:");
@@ -248,8 +254,8 @@ void setBrightness() {
   // The nice thing about the `pwm` function is that we can set the frequency
   // to a much higher value (I use 20kHz) This does not work on all pins!
   // For example, it does not work on pin 7 of the Xiao, but it works on pin 8.
-  int value = map(brightness, MIN_BRIGHTNESS, MAX_BRIGHTNESS, 0, 1023);
-  pwm(ledPin, PWM_FREQ, value);
+  float value = mapf(brightness, MIN_BRIGHTNESS, MAX_BRIGHTNESS, 0, 1);
+  ledPWM.writeScaled(value);
 }
 
 void calibratorOn(byte _brightness) {
@@ -306,7 +312,7 @@ void sendCurrentCover() {
   Serial.print("RESULT:");
   Serial.print(COMMAND_COVER);
   Serial.print(":");
-  if (state == open) {
+  if (state == coverOpen) {
     Serial.println("ON");
   } else {
     Serial.println("OFF");
@@ -316,16 +322,13 @@ void sendCurrentCover() {
 void openCover() {
   servo.startEaseTo(180, servoSpeed);
 
-  // servo.write(180);
-
-  state = open;
+  state = coverOpen;
 }
 
 void closeCover() {
   servo.startEaseTo(0, servoSpeed);
-  // servo.write(0);
 
-  state = closed;
+  state = coverClosed;
 }
 
 void handleInvalidCommand() {
