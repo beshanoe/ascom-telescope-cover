@@ -43,9 +43,11 @@ constexpr auto ERROR_INVALID_COMMAND = "ERROR:INVALID_COMMAND";
 using namespace ace_button;
 
 byte brightness = 0;
+byte lastBrightness = 20;
+bool turnOffLightOnCoverOpen = true;
 int servoPin = 9;
 int ledPin = 8;
-int servoSpeed = 90;
+int servoSpeed = 45;
 
 ESP32PWM ledPWM;
 ServoEasing servo;
@@ -78,13 +80,13 @@ void setup() {
   // }
   Serial.flush();
 
-  setupADXL345();
+  // setupADXL345();
 
   // Initialize servo.
   // Important: We assume that the cover is in the closed position!
   // If it's not, then the servo will brutally close it when the system is powered up!
   // That may damage the mechanical parts, so be careful...
-  servo.attach(servoPin, 0, 510, 2440);
+  servo.attach(servoPin, 0, 530, 2490);
 
   // Make sure the RX, TX, and built-in LEDs don't turn on, they are very bright!
   // Even though the board is inside an enclosure, the light can be seen shining
@@ -122,7 +124,7 @@ void handleButtonEvent(AceButton* button, uint8_t eventType,
         if (brightness > 0) {
           calibratorOff();
         } else {
-          calibratorOn(100);
+          calibratorOn(lastBrightness);
         }
       }
       if (button->getPin() == BUTTON3_PIN) {
@@ -205,7 +207,7 @@ void loop() {
     } else if (command == COMMAND_LIGHT_INTENSITY) {
       sendCalibratorBrightness();
     } else if (command == COMMAND_SET_LIGHT_ON) {
-      calibratorOn(100);
+      calibratorOn(lastBrightness);
     } else if (command == COMMAND_SET_LIGHT_OFF) {
       calibratorOff();
     } else if (command.startsWith(COMMAND_LIGHT_SET_INTENSITY)) {
@@ -254,7 +256,7 @@ void setBrightness() {
   // The nice thing about the `pwm` function is that we can set the frequency
   // to a much higher value (I use 20kHz) This does not work on all pins!
   // For example, it does not work on pin 7 of the Xiao, but it works on pin 8.
-  float value = mapf(brightness, MIN_BRIGHTNESS, MAX_BRIGHTNESS, 0, 1);
+  float value = float(map(brightness, MIN_BRIGHTNESS, MAX_BRIGHTNESS, 0, 1000)) / 1000;
   ledPWM.writeScaled(value);
 }
 
@@ -264,6 +266,9 @@ void calibratorOn(byte _brightness) {
 }
 
 void calibratorOff() {
+  if (brightness > 0) {
+    lastBrightness = brightness;
+  }
   brightness = 0;
   setBrightness();
 }
@@ -320,6 +325,10 @@ void sendCurrentCover() {
 }
 
 void openCover() {
+  if (turnOffLightOnCoverOpen) {
+    calibratorOff();
+  }
+
   servo.startEaseTo(180, servoSpeed);
 
   state = coverOpen;
