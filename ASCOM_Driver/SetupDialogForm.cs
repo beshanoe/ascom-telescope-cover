@@ -3,7 +3,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-namespace ASCOM.DarkSkyGeek
+namespace ASCOM.Astroswell
 {
     // Form not registered for COM!
     [ComVisible(false)]
@@ -28,8 +28,8 @@ namespace ASCOM.DarkSkyGeek
         {
             // Place any validation constraint checks here
             // Update the state variables with results from the dialogue
-            Switch.autoDetectComPort = chkAutoDetect.Checked;
-            Switch.comPortOverride = (string)comboBoxComPort.SelectedItem;
+            CoverCalibrator.autoDetectComPort = chkAutoDetect.Checked;
+            CoverCalibrator.comPortOverride = (string)comboBoxComPort.SelectedItem;
             tl.Enabled = chkTrace.Checked;
         }
 
@@ -57,7 +57,7 @@ namespace ASCOM.DarkSkyGeek
 
         private void InitUI()
         {
-            chkAutoDetect.Checked = Switch.autoDetectComPort;
+            chkAutoDetect.Checked = CoverCalibrator.autoDetectComPort;
             chkTrace.Checked = tl.Enabled;
             comboBoxComPort.Enabled = !chkAutoDetect.Checked;
             // Set the list of COM ports to those that are currently available
@@ -65,9 +65,9 @@ namespace ASCOM.DarkSkyGeek
             // Use System.IO because it's static
             comboBoxComPort.Items.AddRange(System.IO.Ports.SerialPort.GetPortNames());
             // Select the current port if possible
-            if (comboBoxComPort.Items.Contains(Switch.comPortOverride))
+            if (comboBoxComPort.Items.Contains(CoverCalibrator.comPortOverride))
             {
-                comboBoxComPort.SelectedItem = Switch.comPortOverride;
+                comboBoxComPort.SelectedItem = CoverCalibrator.comPortOverride;
             }
         }
 

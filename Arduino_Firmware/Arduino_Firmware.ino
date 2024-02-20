@@ -6,8 +6,6 @@
 
 #include <ESP32Servo.h>
 #include "ServoEasing.hpp"
-#include <Wire.h>
-#include <ADXL345.h>
 #include <AceButton.h>
 
 constexpr auto DEVICE_GUID = "cbbada80-325b-459a-9f70-8677a3e31241";
@@ -18,11 +16,11 @@ constexpr auto RESULT_PING = "RESULT:PING:OK:";
 constexpr auto COMMAND_INFO = "COMMAND:INFO";
 constexpr auto RESULT_INFO = "RESULT:DarkSkyGeek's Telescope Cover Firmware v1.0";
 
-constexpr auto COMMAND_GFORCE = "COMMAND:GFORCE:";
-
 constexpr auto COMMAND_COVER = "COMMAND:COVER";
 constexpr auto COMMAND_SET_COVER_ON = "COMMAND:SET_COVER:ON";
 constexpr auto COMMAND_SET_COVER_OFF = "COMMAND:SET_COVER:OFF";
+
+constexpr auto COMMAND_SET_COVER_SERVO = "COMMAND:SET_COVER:SERVO:";
 
 constexpr auto COMMAND_LIGHT = "COMMAND:LIGHT";
 constexpr auto COMMAND_SET_LIGHT_ON = "COMMAND:SET_LIGHT:ON";
@@ -51,7 +49,6 @@ int servoSpeed = 45;
 
 ESP32PWM ledPWM;
 ServoEasing servo;
-ADXL345 adxl;
 
 AceButton firstButton(BUTTON1_PIN);
 AceButton secondButton(BUTTON2_PIN);
@@ -139,55 +136,6 @@ void handleButtonEvent(AceButton* button, uint8_t eventType,
   }
 }
 
-void setupADXL345() {
-  adxl.powerOn();
-
-  //set activity/ inactivity thresholds (0-255)
-  adxl.setActivityThreshold(75);    //62.5mg per increment
-  adxl.setInactivityThreshold(75);  //62.5mg per increment
-  adxl.setTimeInactivity(10);       // how many seconds of no activity is inactive?
-
-  //look of activity movement on this axes - 1 == on; 0 == off
-  adxl.setActivityX(1);
-  adxl.setActivityY(1);
-  adxl.setActivityZ(1);
-
-  //look of inactivity movement on this axes - 1 == on; 0 == off
-  adxl.setInactivityX(1);
-  adxl.setInactivityY(1);
-  adxl.setInactivityZ(1);
-
-  //look of tap movement on this axes - 1 == on; 0 == off
-  adxl.setTapDetectionOnX(0);
-  adxl.setTapDetectionOnY(0);
-  adxl.setTapDetectionOnZ(1);
-
-  //set values for what is a tap, and what is a double tap (0-255)
-  adxl.setTapThreshold(50);      //62.5mg per increment
-  adxl.setTapDuration(15);       //625us per increment
-  adxl.setDoubleTapLatency(80);  //1.25ms per increment
-  adxl.setDoubleTapWindow(200);  //1.25ms per increment
-
-  //set values for what is considered freefall (0-255)
-  adxl.setFreeFallThreshold(7);  //(5 - 9) recommended - 62.5mg per increment
-  adxl.setFreeFallDuration(45);  //(20 - 70) recommended - 5ms per increment
-
-  //setting all interrupts to take place on int pin 1
-  //I had issues with int pin 2, was unable to reset it
-  adxl.setInterruptMapping(ADXL345_INT_SINGLE_TAP_BIT, ADXL345_INT1_PIN);
-  adxl.setInterruptMapping(ADXL345_INT_DOUBLE_TAP_BIT, ADXL345_INT1_PIN);
-  adxl.setInterruptMapping(ADXL345_INT_FREE_FALL_BIT, ADXL345_INT1_PIN);
-  adxl.setInterruptMapping(ADXL345_INT_ACTIVITY_BIT, ADXL345_INT1_PIN);
-  adxl.setInterruptMapping(ADXL345_INT_INACTIVITY_BIT, ADXL345_INT1_PIN);
-
-  //register interrupt actions - 1 == on; 0 == off
-  adxl.setInterrupt(ADXL345_INT_SINGLE_TAP_BIT, 1);
-  adxl.setInterrupt(ADXL345_INT_DOUBLE_TAP_BIT, 1);
-  adxl.setInterrupt(ADXL345_INT_FREE_FALL_BIT, 1);
-  adxl.setInterrupt(ADXL345_INT_ACTIVITY_BIT, 1);
-  adxl.setInterrupt(ADXL345_INT_INACTIVITY_BIT, 1);
-}
-
 // The `loop` function runs over and over again until power down or reset.
 void loop() {
   if (Serial.available() > 0) {
@@ -214,8 +162,10 @@ void loop() {
       String arg = command.substring(strlen(COMMAND_LIGHT_SET_INTENSITY));
       byte value = (byte)arg.toInt();
       calibratorOn(value);
-    } else if (command.startsWith(COMMAND_GFORCE)) {
-      sendInfoG(command);
+    } else if (command.startsWith(COMMAND_SET_COVER_SERVO)) {
+      String arg = command.substring(strlen(COMMAND_SET_COVER_SERVO));
+      int value = (int)arg.toInt();
+      coverSetMs(value);
     } else {
       handleInvalidCommand();
     }
@@ -284,35 +234,6 @@ void sendFirmwareInfo() {
   Serial.println(RESULT_INFO);
 }
 
-void sendInfoG(String command) {
-  int x, y, z;
-  adxl.readXYZ(&x, &y, &z);  //read the accelerometer values and store them in variables  x,y,z
-  double xyz[3];
-  double ax, ay, az;
-  adxl.getAcceleration(xyz);
-  ax = xyz[0];
-  ay = xyz[1];
-  az = xyz[2];
-
-  String arg = command.substring(strlen(COMMAND_GFORCE));
-  Serial.print("RESULT:");
-  Serial.print(command);
-  Serial.print(":");
-  switch (arg[0]) {
-    case 'X':
-      Serial.println(ax);
-      break;
-    case 'Y':
-      Serial.println(ay);
-      break;
-    case 'Z':
-      Serial.println(az);
-      break;
-    default:
-      Serial.println(0);
-  }
-}
-
 void sendCurrentCover() {
   Serial.print("RESULT:");
   Serial.print(COMMAND_COVER);
@@ -342,4 +263,9 @@ void closeCover() {
 
 void handleInvalidCommand() {
   Serial.println(ERROR_INVALID_COMMAND);
+}
+
+// Service methods
+void coverSetMs(int ms) {
+  servo.startEaseTo(ms, servoSpeed);
 }

@@ -13,7 +13,7 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-namespace ASCOM.DarkSkyGeek
+namespace ASCOM.Astroswell
 {
     //
     // Your driver's DeviceID is ASCOM.DarkSkyGeek.Switch
@@ -28,18 +28,18 @@ namespace ASCOM.DarkSkyGeek
     /// </summary>
     [Guid("a8047099-516a-43f4-bf01-c714f2d144b4")]
     [ClassInterface(ClassInterfaceType.None)]
-    public class Switch : ISwitchV2
+    public class CoverCalibrator : ICoverCalibratorV1
     {
         /// <summary>
         /// ASCOM DeviceID (COM ProgID) for this driver.
         /// The DeviceID is used by ASCOM applications to load the driver at runtime.
         /// </summary>
-        internal const string driverID = "ASCOM.DarkSkyGeek.Switch";
+        internal const string driverID = "ASCOM.Astroswell.CoverCalibrator";
 
         /// <summary>
         /// Driver description that displays in the ASCOM Chooser.
         /// </summary>
-        private static string deviceName = "DarkSkyGeek’s Telescope Cover";
+        private static string deviceName = "Astroswell Roboflat";
 
         // Constants used for Profile persistence
         internal static string autoDetectComPortProfileName = "Auto-Detect COM Port";
@@ -75,10 +75,7 @@ namespace ASCOM.DarkSkyGeek
         {
             new ToggleSwitch { Name = "Cover", Description = "Automatically opens or closes the telescope cover", SetCommand = "COMMAND:SET_COVER:", GetCommand = "COMMAND:COVER" },
             new ToggleSwitch { Name = "Light", Description = "Automatically turns on or off the light", SetCommand = "COMMAND:SET_LIGHT:", GetCommand = "COMMAND:LIGHT" },
-            new RangeSwitch { Name = "Light Intensity", Description = "Adjusts the light intensity", Max = MAX_BRIGHTNESS, Min = 0, Step = 1, SetCommand = "COMMAND:LIGHT:SET_INTENSITY:", GetCommand = "COMMAND:LIGHT:INTENSITY" },
-            new ReadonlySwitch { Name = "G force x", Description = "Measures the G force on the x axis", GetCommand = "COMMAND:GFORCE:X" },
-            new ReadonlySwitch { Name = "G force y", Description = "Measures the G force on the y axis", GetCommand = "COMMAND:GFORCE:Y" },
-            new ReadonlySwitch { Name = "G force z", Description = "Measures the G force on the z axis", GetCommand = "COMMAND:GFORCE:Z" },
+            new RangeSwitch { Name = "Light Intensity", Description = "Adjusts the light intensity", Max = MAX_BRIGHTNESS, Min = 0, Step = 1, SetCommand = "COMMAND:LIGHT:SET_INTENSITY:", GetCommand = "COMMAND:LIGHT:INTENSITY" }
         };
 
         // Constants used to communicate with the device
@@ -95,16 +92,16 @@ namespace ASCOM.DarkSkyGeek
         private const int MAX_BRIGHTNESS = 255;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="Switch"/> class.
+        /// Initializes a new instance of the <see cref="CoverCalibrator"/> class.
         /// Must be public for COM registration.
         /// </summary>
-        public Switch()
+        public CoverCalibrator()
         {
-            tl = new TraceLogger("", "DarkSkyGeek");
+            tl = new TraceLogger("", "Astroswell");
             ReadProfile();
-            tl.LogMessage("Switch", "Starting initialisation");
+            tl.LogMessage("CoverCalibrator", "Starting initialisation");
             connectedState = false;
-            tl.LogMessage("Switch", "Completed initialisation");
+            tl.LogMessage("CoverCalibrator", "Completed initialisation");
         }
 
         //
@@ -658,7 +655,7 @@ namespace ASCOM.DarkSkyGeek
         {
             using (var P = new ASCOM.Utilities.Profile())
             {
-                P.DeviceType = "Switch";
+                P.DeviceType = "CoverCalibrator";
                 if (bRegister)
                 {
                     P.Register(driverID, deviceName);
@@ -729,6 +726,29 @@ namespace ASCOM.DarkSkyGeek
             }
         }
 
+        public CoverStatus CoverState {
+            get {
+                return GetSwitch(0) ? CoverStatus.Open : CoverStatus.Closed;
+            }
+        }
+
+        public CalibratorStatus CalibratorState
+        {
+            get
+            {
+                return CalibratorStatus.Ready;
+            }
+        }
+
+        public int Brightness {             
+            get
+            {
+                return Convert.ToInt32(QueryDeviceValue(switches[2].GetCommand));
+            }
+        }
+        
+        public int MaxBrightness => MAX_BRIGHTNESS;
+
         /// <summary>
         /// Use this function to throw an exception if we aren't connected to the hardware
         /// </summary>
@@ -748,7 +768,7 @@ namespace ASCOM.DarkSkyGeek
         {
             using (Profile driverProfile = new Profile())
             {
-                driverProfile.DeviceType = "Switch";
+                driverProfile.DeviceType = "CoverCalibrator";
                 tl.Enabled = Convert.ToBoolean(driverProfile.GetValue(driverID, traceStateProfileName, string.Empty, traceStateDefault));
                 autoDetectComPort = Convert.ToBoolean(driverProfile.GetValue(driverID, autoDetectComPortProfileName, string.Empty, autoDetectComPortDefault));
                 comPortOverride = driverProfile.GetValue(driverID, comPortProfileName, string.Empty, comPortDefault);
@@ -762,7 +782,7 @@ namespace ASCOM.DarkSkyGeek
         {
             using (Profile driverProfile = new Profile())
             {
-                driverProfile.DeviceType = "Switch";
+                driverProfile.DeviceType = "CoverCalibrator";
                 driverProfile.WriteValue(driverID, traceStateProfileName, tl.Enabled.ToString());
                 driverProfile.WriteValue(driverID, autoDetectComPortProfileName, autoDetectComPort.ToString());
                 if (comPortOverride != null)
@@ -884,6 +904,31 @@ namespace ASCOM.DarkSkyGeek
             tl.LogMessage("SendCommand", "Sending request to device...");
             objSerial.Transmit(command + SEPARATOR);
             tl.LogMessage("SendCommand", "Request sent to device!");
+        }
+
+        public void OpenCover()
+        {
+            SetSwitch(0, true);
+        }
+
+        public void CloseCover()
+        { 
+            SetSwitch(0, false);
+        }
+
+        public void HaltCover()
+        {
+            SetSwitch(0, false);
+        }
+
+        public void CalibratorOn(int Brightness)
+        {
+            SetSwitchValue(2, Brightness);
+        }
+
+        public void CalibratorOff()
+        {
+            SetSwitch(1, false);
         }
 
 

@@ -4,7 +4,7 @@
  * Licensed under the MIT License. See the accompanying LICENSE file for terms.
  */
 
-namespace ASCOM.DarkSkyGeek
+namespace ASCOM.Astroswell
 {
     internal class BaseSwitch
     {

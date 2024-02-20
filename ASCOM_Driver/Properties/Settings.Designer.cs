@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace ASCOM.DarkSkyGeek.Properties {
+namespace ASCOM.Astroswell.Properties {
     
     
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]

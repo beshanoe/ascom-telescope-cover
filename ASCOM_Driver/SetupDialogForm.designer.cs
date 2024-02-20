@@ -1,4 +1,4 @@
-namespace ASCOM.DarkSkyGeek
+namespace ASCOM.Astroswell
 {
     partial class SetupDialogForm
     {
@@ -43,7 +43,7 @@ namespace ASCOM.DarkSkyGeek
             this.cmdOK.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.cmdOK.DialogResult = System.Windows.Forms.DialogResult.OK;
             this.cmdOK.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.cmdOK.Image = global::ASCOM.DarkSkyGeek.Properties.Resources.icon_ok_24;
+            this.cmdOK.Image = global::ASCOM.Astroswell.Properties.Resources.icon_ok_24;
             this.cmdOK.Location = new System.Drawing.Point(177, 94);
             this.cmdOK.Name = "cmdOK";
             this.cmdOK.Padding = new System.Windows.Forms.Padding(5, 0, 0, 0);
@@ -57,7 +57,7 @@ namespace ASCOM.DarkSkyGeek
             this.cmdCancel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
             this.cmdCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel;
             this.cmdCancel.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.cmdCancel.Image = global::ASCOM.DarkSkyGeek.Properties.Resources.icon_cancel_24;
+            this.cmdCancel.Image = global::ASCOM.Astroswell.Properties.Resources.icon_cancel_24;
             this.cmdCancel.Location = new System.Drawing.Point(259, 94);
             this.cmdCancel.Name = "cmdCancel";
             this.cmdCancel.Size = new System.Drawing.Size(74, 37);
@@ -99,7 +99,7 @@ namespace ASCOM.DarkSkyGeek
             // picASCOM
             // 
             this.picASCOM.Cursor = System.Windows.Forms.Cursors.Hand;
-            this.picASCOM.Image = global::ASCOM.DarkSkyGeek.Properties.Resources.darkskygeek;
+            this.picASCOM.Image = global::ASCOM.Astroswell.Properties.Resources.darkskygeek;
             this.picASCOM.Location = new System.Drawing.Point(12, 9);
             this.picASCOM.Name = "picASCOM";
             this.picASCOM.Size = new System.Drawing.Size(120, 120);
